@@ -1,0 +1,41 @@
+---
+
+# Returns:
+# * _aws_subnet_id
+# * _aws_subnet_name
+- include_tasks: gather_facts.yml
+
+###
+### delete nat gateway if exists
+###
+
+- name: fail if more then one nat gateway for given filters was found
+  assert:
+    that:
+      - _aws_vpc_nat_facts.result is undefined or _aws_vpc_nat_facts.result | length <= 1
+    msg: More than one nat gateway was found for given filters
+
+- name: set nat gateway id
+  set_fact:
+    _aws_nat_gateway_id: "{{ _aws_vpc_nat_facts.result[0].nat_gateway_id }}"
+  when:
+    - _aws_vpc_nat_facts.result is defined and _aws_vpc_nat_facts.result | length == 1
+
+- name: "delete nat gateway with id {{ _aws_nat_gateway_id }} for Subnet with ID {{ _aws_subnet_id }}"
+  ec2_vpc_nat_gateway:
+    # Fixed values
+    state: absent
+    wait: True
+    wait_timeout: 300
+    # Looked-up values
+    nat_gateway_id: "{{ _aws_nat_gateway_id }}"
+    subnet_id: "{{ _aws_subnet_id }}"
+    # Optional values
+    allocation_id: "{{ _aws_eip_id | default(omit) }}"
+    region: "{{ natgw.region | default(aws_vpc_nat_default_region | default(omit)) }}"
+    aws_access_key: "{{ lookup('ENV', 'AWS_ACCESS_KEY') | default(omit) }}"
+    aws_secret_key: "{{ lookup('ENV', 'AWS_SECRET_KEY') | default(omit) }}"
+    security_token: "{{ lookup('ENV', 'AWS_SECURITY_TOKEN') | default(omit) }}"
+    profile: "{{ aws_vpc_nat_profile | default(omit) }}"
+  when:
+    - _aws_vpc_nat_facts.result is defined and _aws_vpc_nat_facts.result | length == 1

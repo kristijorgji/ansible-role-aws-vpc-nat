@@ -1,0 +1,94 @@
+---
+
+- name: ensure nat gw array contains name key
+  assert:
+    that:
+      - natgw.name is defined
+      - natgw.name | length > 0
+    msg: "aws_vpc_nat_gateways[x].name is not defined, but required"
+
+- name: ensure subnet filter or name is defined
+  assert:
+    that:
+      # subnet_filter OR subnet_name must be defined
+      - natgw.subnet_filter is defined or natgw.subnet_name is defined
+      # subnet_filter AND subnet_name must not be defined at the same time
+      - not (natgw.subnet_filter is defined and natgw.subnet_name is defined)
+    msg: "aws_vpc_nat_gateway[x].subnet_filter XOR subnet_name must be defined"
+
+- name: ensure eip filter and name are not both defined
+  assert:
+    that:
+      # eip_filter AND eip_name must not be defined at the same time
+      - not (natgw.eip_filter is defined and natgw.eip_name is defined)
+    msg: "aws_vpc_nat_gateway[x].eip_filter XOR eip_name must be defined"
+
+
+###
+### gather facts
+###
+
+- name: reset values for every loop iteration
+  set_fact:
+    _aws_subnet_id:
+    _aws_subnet_name:
+    _aws_eip_id:
+    _aws_eip_ip:
+
+# Returns:
+# * _aws_subnet_facts
+- include_tasks: gather_subnet_facts_by_filter.yml
+  when:
+    - natgw.subnet_filter is defined
+
+# Returns:
+# * _aws_subnet_facts
+- include_tasks: gather_subnet_facts_by_name.yml
+  when:
+    - natgw.subnet_name is defined
+
+
+# Returns (if desired):
+# * _aws_eip_facts
+- include_tasks: gather_eip_facts_by_filter.yml
+  when:
+    - natgw.eip_filter is defined
+
+# Returns (if desired):
+# * _aws_eip_facts
+- include_tasks: gather_eip_facts_by_name.yml
+  when:
+    - natgw.eip_name is defined
+
+###
+### Check if subnet already has a Nat GW
+###
+
+- name: set subnet id and name
+  set_fact:
+    _aws_subnet_id: "{{ _aws_subnet_facts.subnets[0].id }}"
+    _aws_subnet_name: "{{ _aws_subnet_facts.subnets[0].tags.Name }}"
+  when:
+    - _aws_subnet_facts.subnets | length > 0
+
+- name: set nat gateway filters
+  set_fact:
+    _aws_vpc_nat_gw_filter:
+      - key: state
+        val: available
+      - key: subnet-id
+        val: "{{ _aws_subnet_id }}"
+  when:
+    - _aws_subnet_facts.subnets | length > 0
+
+- name: find existing nat gateway in subnet
+  ec2_vpc_nat_gateway_facts:
+    aws_access_key: "{{ lookup('ENV', 'AWS_ACCESS_KEY') | default(omit) }}"
+    aws_secret_key: "{{ lookup('ENV', 'AWS_SECRET_KEY') | default(omit) }}"
+    security_token: "{{ lookup('ENV', 'AWS_SECURITY_TOKEN') | default(omit) }}"
+    profile: "{{ aws_vpc_nat_profile | default(omit) }}"
+    region: "{{ natgw.region | default(aws_vpc_nat_default_region | default(omit)) }}"
+    filters: "{{ _aws_vpc_nat_gw_filter | get_attr('key', 'val') }}"
+  register: _aws_vpc_nat_facts
+  when:
+    - _aws_subnet_facts.subnets | length > 0

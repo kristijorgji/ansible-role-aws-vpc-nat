@@ -18,6 +18,7 @@ Additional variables that can be used (either as `host_vars`/`group_vars` or via
 |----------------------------------------|------------------------------|
 | `aws_vpc_nat_profile`                  | Boto profile name to be used |
 | `aws_vpc_nat_default_region`           | Default region to use        |
+| `aws_vpc_nat_state`           | Default is `present`, possible values: `present` or `absent`. absent will delete the resource        |
 | `aws_vpc_nat_eip_filter_additional`    | Additional `key` `val` filter to add to `eip_filter` and `eip_name` by default |
 | `aws_vpc_nat_subnet_filter_additional` | Additional `key` `val` filter to add to `subnet_filter` and `subnet_name` by default |
 
